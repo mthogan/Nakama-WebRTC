@@ -5,6 +5,6 @@ docker-compose.yml
 *.exe
 *.pck
 codegen
-testsuite
+test_suite
 addons/github-integration
 .cookie

@@ -1,0 +1,9 @@
+*.swp
+*.import
+*.bat
+docker-compose.yml
+*.exe
+*.pck
+codegen
+testsuite
+addons/github-integration

@@ -2,15 +2,15 @@
 
 [ext_resource path="res://ChatContainer.gd" type="Script" id=1]
 
-[sub_resource type="StyleBoxFlat" id=3]
+[sub_resource type="StyleBoxFlat" id=1]
 bg_color = Color( 0.172549, 0.164706, 0.196078, 1 )
 
-[sub_resource type="InputEventKey" id=1]
+[sub_resource type="InputEventKey" id=2]
 pressed = true
 scancode = 16777221
 
-[sub_resource type="ShortCut" id=2]
-shortcut = SubResource( 1 )
+[sub_resource type="ShortCut" id=3]
+shortcut = SubResource( 2 )
 
 [node name="ChatContainer" type="VBoxContainer"]
 anchor_right = 1.0
@@ -28,7 +28,8 @@ margin_bottom = 576.0
 focus_mode = 2
 size_flags_horizontal = 3
 size_flags_vertical = 3
-custom_styles/normal = SubResource( 3 )
+custom_styles/normal = SubResource( 1 )
+bbcode_enabled = true
 scroll_following = true
 selection_enabled = true
 
@@ -49,6 +50,6 @@ caret_blink = true
 margin_left = 978.0
 margin_right = 1024.0
 margin_bottom = 24.0
-shortcut = SubResource( 2 )
+shortcut = SubResource( 3 )
 text = "SEND"
 [connection signal="pressed" from="HBoxContainer/ChatButton" to="." method="_on_ChatButton_pressed"]

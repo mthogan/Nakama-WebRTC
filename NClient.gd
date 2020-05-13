@@ -10,6 +10,7 @@ const STORE_FILE = "user://store.ini"
 const STORE_SECTION = "nakama"
 const STORE_KEY = "session"
 
+var user_id
 var session : NakamaSession = null
 var rand: RandomNumberGenerator = RandomNumberGenerator.new()
 
@@ -53,6 +54,7 @@ func _get_account():
 	if account.is_exception():
 		print("We got an exception")
 		return
+	user_id = account.user.id
 #	var user = account.user
 #	print("User id '%s' and username '%s'." % [user.id, user.username])
 #	print("User's wallet: %s." % account.wallet)

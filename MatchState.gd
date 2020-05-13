@@ -3,6 +3,8 @@ extends Node
 signal peers_received(peers)
 signal peer_joined(socket, match_id, connected_opponents)
 onready var socket = NClient.socket
+var connected_opponents : Dictionary
+var match_id
 
 enum OP_CODE {
 	PEERS = 1,
@@ -27,6 +29,5 @@ func _on_match_state_received(p_state : NakamaRTAPI.MatchData):
 			emit_signal("peers_received", data3)
 			
 		OP_CODE.JOIN:
-			var data = parse_json(p_state.data)
 			print("emit peer_joined")
-			emit_signal("peer_joined", data.match_id, data.connected_opponents)
+			emit_signal("peer_joined")

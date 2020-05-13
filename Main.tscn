@@ -88,11 +88,10 @@ size_flags_vertical = 3
 allow_reselect = true
 
 [node name="ChatLobby" parent="HBoxContainer/VBoxContainer" instance=ExtResource( 2 )]
-anchor_right = 0.0
-anchor_bottom = 0.0
 margin_top = 300.0
-margin_right = 874.0
 margin_bottom = 600.0
+size_flags_horizontal = 3
+size_flags_vertical = 3
 
 [node name="Panel" type="Panel" parent="."]
 visible = false
@@ -157,11 +156,8 @@ __meta__ = {
 }
 
 [node name="ChatMatch" parent="Panel/VBoxContainer/HBoxContainer2" instance=ExtResource( 2 )]
-anchor_right = 0.0
-anchor_bottom = 0.0
 margin_left = 150.0
 margin_right = 1024.0
-margin_bottom = 300.0
 size_flags_horizontal = 3
 
 [node name="MatchmakeDialog" type="AcceptDialog" parent="."]

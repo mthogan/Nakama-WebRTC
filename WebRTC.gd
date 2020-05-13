@@ -17,13 +17,11 @@ var options = {
 #	"protocol": "my-custom-protocol", # A custom sub-protocol string for this channel.
 }
 
-var socket
+var socket = NClient.socket
 var _index
 var data_channel: WebRTCDataChannel
 var peer_id
 var state = 5
-var _match_id
-var _connected_opponents
 
 enum ConnectionState {
 	STATE_NEW = 0, # — The connection is new, data channels and an offer can be created in this state.
@@ -91,14 +89,11 @@ func register(user_id):
 #				else:
 #					print("%s create offer success %s" % [p, offer])
 
-func join(match_id, connected_opponents, user_id):
+func join(user_id):
 	peer_id = user_id
-	_match_id = match_id
-	_connected_opponents = connected_opponents
-	var target = connected_opponents
+	var target = MatchState.connected_opponents
 	target.erase(peer_id)
-	var data = {"match_id": match_id, "connected_opponents": connected_opponents}
-	send_data(match_id, target, 2, JSON.print(data))
+	send_data(MatchState.match_id, target, 2, "")
 	
 
 func _on_session_description_created(type: String, sdp: String):
@@ -142,11 +137,11 @@ func send_data(match_id, connected_opponents, op_code, data):
 		return
 #	print("Succesfully sent message to %s" %presences.values())
 
-func _on_peer_joined(match_id, connected_opponents):
+func _on_peer_joined():
 	print("_on_peer_joined")
-	var target = connected_opponents
+	var target = MatchState.connected_opponents
 	target.erase(peer_id)
-	send_data(match_id, connected_opponents, 1, Marshalls.variant_to_base64(peers, true))
+	send_data(MatchState.match_id, target, 1, Marshalls.variant_to_base64(peers, true))
 	
 func _on_peers_received(new_peers):
 	print("_on_peers_received")
@@ -158,8 +153,8 @@ func _on_peers_received(new_peers):
 	else:
 		print("%s is not in peers" %peer_id)
 		register(peer_id)
-		var target = _connected_opponents
+		var target = MatchState.connected_opponents
 		target.erase(peer_id)
-		send_data(_match_id, target, 1, Marshalls.variant_to_base64(peers, true))
+		send_data(MatchState.match_id, target, 1, Marshalls.variant_to_base64(peers, true))
 		
 

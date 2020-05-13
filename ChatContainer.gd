@@ -1,9 +1,9 @@
-extends VBoxContainer
+extends Control
 
 signal message_sent(text)
-onready var button = $HBoxContainer/ChatButton
+onready var button = $Chat/LineEdit/ChatButton
 onready var chat = $Chat
-onready var edit = $HBoxContainer/LineEdit
+onready var edit = $Chat/LineEdit
 
 
 func _on_ChatButton_pressed():

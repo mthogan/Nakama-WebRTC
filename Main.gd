@@ -1,6 +1,7 @@
 extends Node
 
-var webrtc = load("res://WebRTC.gd").new()
+var webrtcScript = preload("res://WebRTC.gd")
+var webrtc : Node
 onready var socket = NClient.socket
 onready var channel : NakamaRTAPI.Channel
 onready var client = NClient.client
@@ -11,9 +12,11 @@ var connected_users = {}
 var available_matches = {}
 var match_data
 var matchmaker_ticket : NakamaRTAPI.MatchmakerTicket
+var my_session_id
 
 func _ready():
 	socket.connect("connected", self, "_on_socket_connected")
+	socket.connect("closed", self, "_on_closed")
 	socket.connect("received_channel_presence", self, "_on_channel_presence_received")
 	socket.connect("received_channel_message", self, "_on_channel_message_received")
 	socket.connect("received_match_presence", self, "_on_match_presence_received")
@@ -21,7 +24,7 @@ func _ready():
 	socket.connect("received_stream_presence", self, "_on_stream_presence_received")
 	socket.connect("received_stream_state", self, "_on_stream_state_received")
 	dialog.get_close_button().connect("pressed", self, "_on_matchmake_dialog_closed")
-	$HBoxContainer/VBoxContainer/ChatLobby/HBoxContainer/LineEdit.grab_focus()
+	$HBoxContainer/VBoxContainer/ChatLobby/Chat/LineEdit.grab_focus()
 
 func _on_socket_connected():
 	#Fetch account info
@@ -67,9 +70,9 @@ func _on_channel_message_received(message):
 	var p = JSON.parse(message.content)
 	if typeof(p.result) == TYPE_DICTIONARY:
 		var m = p.result["chat"]
-		var make_message : String = str("[%s]: %s" %[message.username,m])
+		var make_message : String = str("\n[%s]: %s" %[message.username,m])
 		if message.room_name == "Public":
-			$HBoxContainer/VBoxContainer/ChatLobby/Chat.add_bbtext(make_message)
+			$HBoxContainer/VBoxContainer/ChatLobby/Chat.add_text(make_message)
 		else:
 			$Panel/VBoxContainer/HBoxContainer2/ChatMatch/Chat.add_text(make_message)
 
@@ -94,7 +97,7 @@ func open_match_room():
 	var hidden = false
 	var type = NakamaSocket.ChannelType.Room
 	yield(join_chat_channel(roomname, type, persistence, hidden), "completed")
-	$Panel/VBoxContainer/HBoxContainer2/ChatMatch/HBoxContainer/LineEdit.grab_focus()
+	$Panel/VBoxContainer/HBoxContainer2/ChatMatch/Chat/LineEdit.grab_focus()
 
 func join_match(id):
 	var joined_match : NakamaRTAPI.Match = yield(socket.join_match_async(id), "completed")
@@ -114,18 +117,17 @@ func join_match(id):
 	for presence in joined_match.presences:
 		MatchState.connected_opponents[presence.user_id] = presence
 		print("\n[joinPresence]User id %s name %s'." % [presence.user_id, presence.username])
-	add_child(webrtc)
-	yield(get_tree().create_timer(1), "timeout")
-	webrtc.socket = socket
-	webrtc.join(joined_match.match_id, MatchState.connected_opponents, NClient.user_id)
+		
+	new_rtc("join")
 	
 func _on_Create_pressed():
 	var created_match : NakamaRTAPI.Match = yield(socket.create_match_async(), "completed")
 	if created_match.is_exception():
-		print("\nAn error occured: %s" % created_match)
+		print("\nAn error occured: %s" % created_match.exception)
 		return 
 	print("\nCreated new match with id %s.", created_match.match_id)
 	MatchState.match_id = created_match.match_id
+	my_session_id = created_match.self_user.session_id
 #	match_data = created_match
 #	match_data[]
 #	webrtc_multiplayer.initialize(1)
@@ -133,10 +135,8 @@ func _on_Create_pressed():
 	notify_new_match()
 	open_match_room()
 	
-	add_child(webrtc)
-	yield(get_tree().create_timer(1), "timeout")
-	webrtc.socket = socket
-	webrtc.register(NClient.user_id)
+	new_rtc("create")
+
 
 
 func _on_Join_pressed():
@@ -163,10 +163,12 @@ func _on_Leave_pressed():
 		return
 	print("Match left")
 	MatchState.match_id = null
-	$HBoxContainer/VBoxContainer/ChatLobby/HBoxContainer/LineEdit.grab_focus()
+	$HBoxContainer/VBoxContainer/ChatLobby/Chat/LineEdit.grab_focus()
 	$Panel.hide()
 	$Panel/VBoxContainer/HBoxContainer2/ChatMatch/Chat.clear()
 	
+#	remove_child(get_node("Node"))
+	get_node("Node").queue_free()
 	#Rejoin lobby chat channel
 	var roomname = "Public"
 	var persistence = false
@@ -238,8 +240,8 @@ func get_match_list():
 	
 func update_lobby_list():
 	var matchList = $HBoxContainer/VBoxContainer/VBoxContainer/MatchList
-	var match_list = yield(get_match_list(), "completed")
 	matchList.clear()
+	var match_list = yield(get_match_list(), "completed")
 	for _match in match_list:
 		print(_match)
 		matchList.add_item(_match.match_id, null, true)
@@ -296,3 +298,14 @@ func _on_stream_presence_received(_p_stream_presence_event):
 
 func _on_Button3_pressed():
 	webrtc.send_message("Hi from %s" %NClient.user_id)
+
+func new_rtc(type: String):
+	webrtc = webrtcScript.new()
+	add_child(webrtc, true)
+	yield(get_tree().create_timer(1), "timeout")
+	if type == "create":
+		webrtc.register(NClient.user_id)
+		return
+	elif type == "join":
+		webrtc.join(NClient.user_id)
+		return

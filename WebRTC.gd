@@ -17,7 +17,7 @@ var options = {
 #	"protocol": "my-custom-protocol", # A custom sub-protocol string for this channel.
 }
 
-var socket
+var socket = NClient.socket
 var _index
 var data_channel: WebRTCDataChannel
 var peer_id

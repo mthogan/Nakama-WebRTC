@@ -1,22 +1,23 @@
 extends Node
 
-var webrtcScript = preload("res://WebRTC.gd")
-var webrtc : Node
 onready var socket = NClient.socket
 onready var channel : NakamaRTAPI.Channel
 onready var client = NClient.client
-var my_account
-onready var webrtc_multiplayer = NClient.webrtc_multiplayer
 onready var dialog = $MatchmakeDialog
+onready var user_list = $Main/UserList
+onready var chat_main = $Main/VBoxContainer/ChatLobby
+onready var top_bar = $Main/VBoxContainer/VBoxContainer/TopBar
+onready var match_list = $Main/VBoxContainer/VBoxContainer/MatchList
+onready var chat_lobby = $Lobby/VBoxContainer/HBoxContainer2/ChatMatch
+onready var player_list = $Lobby/VBoxContainer/HBoxContainer2/PlayerList
+var my_account
 var connected_users = {}
 var available_matches = {}
-var match_data
 var matchmaker_ticket : NakamaRTAPI.MatchmakerTicket
-var my_session_id
 
 func _ready():
 	socket.connect("connected", self, "_on_socket_connected")
-	socket.connect("closed", self, "_on_closed")
+#	socket.connect("closed", self, "_on_closed")
 	socket.connect("received_channel_presence", self, "_on_channel_presence_received")
 	socket.connect("received_channel_message", self, "_on_channel_message_received")
 	socket.connect("received_match_presence", self, "_on_match_presence_received")
@@ -24,12 +25,15 @@ func _ready():
 	socket.connect("received_stream_presence", self, "_on_stream_presence_received")
 	socket.connect("received_stream_state", self, "_on_stream_state_received")
 	dialog.get_close_button().connect("pressed", self, "_on_matchmake_dialog_closed")
-	$HBoxContainer/VBoxContainer/ChatLobby/Chat/LineEdit.grab_focus()
+	MatchState.connect("game_start", self, "on_game_start")
+	chat_main.edit.grab_focus()
+
 
 func _on_socket_connected():
 	#Fetch account info
 	my_account = yield(NClient._get_account(), "completed")
 	join_stream(my_account.user)
+	MatchState.my_user_id = my_account.user.id
 	#Join lobby chat channel
 	var roomname = "Public"
 	var persistence = false
@@ -37,18 +41,20 @@ func _on_socket_connected():
 	var type = NakamaSocket.ChannelType.Room
 	yield(join_chat_channel(roomname, type, persistence, hidden), "completed")
 	for p in channel.presences:
-		print("[init channel here %s]"%p)
+#		print("[init channel here %s]"%p)
 		connected_users[p.user_id] = p
-	update_player_list()
+	update_user_list()
 	update_lobby_list()
+
 
 func join_stream(user):
 	var stream = yield(socket.rpc_async("join_stream", user), "completed")
 	if stream.is_exception():
 		print("[join_stream]An error occured: %s" % stream)
 		return
-	print("[join_stream]Successfully joined: %s" % stream)
-	
+#	print("[join_stream]Successfully joined: %s" % stream)
+
+
 ### CHANNEL AND CHAT STUFFS ###
 func join_chat_channel(roomname, type, persistence, hidden):
 	channel = yield(socket.join_chat_async(roomname, type, persistence, hidden), "completed")
@@ -63,7 +69,7 @@ func _on_channel_presence_received(_presence):
 		connected_users[p.user_id] = p
 	for p in _presence.leaves:
 		connected_users.erase(p.user_id)
-	update_player_list()
+	update_user_list()
 
 
 func _on_channel_message_received(message):
@@ -72,9 +78,9 @@ func _on_channel_message_received(message):
 		var m = p.result["chat"]
 		var make_message : String = str("\n[%s]: %s" %[message.username,m])
 		if message.room_name == "Public":
-			$HBoxContainer/VBoxContainer/ChatLobby/Chat.add_text(make_message)
+			chat_main.chat.add_text(make_message)
 		else:
-			$Panel/VBoxContainer/HBoxContainer2/ChatMatch/Chat.add_text(make_message)
+			chat_main.chat.add_text(make_message)
 
 
 func _on_ChatLobby_message_sent(text):
@@ -89,7 +95,7 @@ func _on_ChatMatch_message_sent(text):
 
 ### MATCH STUFFS ###
 func open_match_room():
-	$Panel.show()
+	$Lobby.show()
 	dialog.hide()
 	# Join match chat channel
 	var roomname = MatchState.match_id
@@ -97,78 +103,63 @@ func open_match_room():
 	var hidden = false
 	var type = NakamaSocket.ChannelType.Room
 	yield(join_chat_channel(roomname, type, persistence, hidden), "completed")
-	$Panel/VBoxContainer/HBoxContainer2/ChatMatch/Chat/LineEdit.grab_focus()
+	chat_lobby.edit.grab_focus()
 
 func join_match(id):
 	var joined_match : NakamaRTAPI.Match = yield(socket.join_match_async(id), "completed")
 	if joined_match.is_exception():
-		print("\nAn error occured: %s" % joined_match)
+		print("\n[join_match_async]An error occured: %s" % joined_match)
+		update_lobby_list()
 		return
-	print("Joined match: %s" % [joined_match])	
-	MatchState.match_id = joined_match.match_id
+	print("Joined match: %s" % [joined_match.match_id])
+	MatchState.update_match_data(joined_match)
 	open_match_room()
-#	var webrtc_peer := WebRTCPeerConnection.new()
-#	webrtc_peer.initialize({
-#		"iceServers": [{ "urls": ["stun:stun.l.google.com:19302"] }]
-#	})
-#	webrtc_peer.connect("session_description_created", self, "_on_webrtc_peer_session_description_created", [u['session_id']])
-#	webrtc_peer.connect("ice_candidate_created", self, "_on_webrtc_peer_ice_candidate_created", [u['session_id']])
 	
 	for presence in joined_match.presences:
-		MatchState.connected_opponents[presence.user_id] = presence
-		print("\n[joinPresence]User id %s name %s'." % [presence.user_id, presence.username])
-		
-	new_rtc("join")
-	
-func _on_Create_pressed():
+		MatchState.connected_players[presence.user_id] = presence
+#		print("\n[joinPresence]User id %s name %s'." % [presence.user_id, presence.username])
+
+
+func _on_TopBar_on_Create_pressed():
 	var created_match : NakamaRTAPI.Match = yield(socket.create_match_async(), "completed")
 	if created_match.is_exception():
-		print("\nAn error occured: %s" % created_match.exception)
+		print("\n[create_match_async]An error occured: %s." % created_match.exception)
 		return 
-	print("\nCreated new match with id %s.", created_match.match_id)
-	MatchState.match_id = created_match.match_id
-	my_session_id = created_match.self_user.session_id
-#	match_data = created_match
-#	match_data[]
-#	webrtc_multiplayer.initialize(1)
-#	get_tree().set_network_peer(webrtc_multiplayer)
-	notify_new_match()
-	open_match_room()
+	print("\nCreated new match with id %s." % created_match.match_id)
 	
-	new_rtc("create")
+	MatchState.update_match_data(created_match, true)
+	notify_new_match()
+	$Lobby/VBoxContainer/HBoxContainer/Start.disabled = false
+	open_match_room()
 
 
-
-func _on_Join_pressed():
-	var text = $HBoxContainer/VBoxContainer/VBoxContainer/HBoxContainer/VBoxContainer/LineEdit.text
+func _on_TopBar_on_Join_pressed():
+	var text = top_bar.edit.text
 	if text.empty():
 		return
 	join_match(text)
-	$HBoxContainer/VBoxContainer/VBoxContainer/HBoxContainer/VBoxContainer/LineEdit.text = ""
-	
-	
+	top_bar.edit.text = ""
+
+
 func _on_MatchList_item_activated(index):
-	var match_list= $HBoxContainer/VBoxContainer/VBoxContainer/MatchList
 	var text = match_list.get_item_text(index)
-	var metadata = match_list.get_item_metadata(index)
-	print("text %s" %text)
-	print("metadata %s" %metadata)
 	join_match(text)
 
 
 func _on_Leave_pressed():
 	var leave : NakamaAsyncResult = yield(socket.leave_match_async(MatchState.match_id), "completed")
 	if leave.is_exception():
-		print("An error occured: %s" % leave)
+		print("[leave_match_async]An error occured: %s" % leave)
 		return
 	print("Match left")
 	MatchState.match_id = null
-	$HBoxContainer/VBoxContainer/ChatLobby/Chat/LineEdit.grab_focus()
-	$Panel.hide()
-	$Panel/VBoxContainer/HBoxContainer2/ChatMatch/Chat.clear()
+	chat_lobby.edit.grab_focus()
+	$Lobby.hide()
+	$Lobby/VBoxContainer/HBoxContainer/Start.disabled = true
+	MatchState.leave()
+	MatchState.connected_players.clear()
+	chat_lobby.chat.clear()
 	
-#	remove_child(get_node("Node"))
-	get_node("Node").queue_free()
 	#Rejoin lobby chat channel
 	var roomname = "Public"
 	var persistence = false
@@ -181,13 +172,13 @@ func _on_Leave_pressed():
 func _on_match_presence_received(p_presence : NakamaRTAPI.MatchPresenceEvent):
 	print("\n[matchPressenceReceived]%s:"%p_presence)
 	for p in p_presence.joins:
-		MatchState.connected_opponents[p.user_id] = p
+		MatchState.on_player_joins(p)
 	for p in p_presence.leaves:
-		MatchState.connected_opponents.erase(p.user_id)
-	update_opponent_list()
+		MatchState.on_player_leaves(p)
+	update_player_list()
 
 
-func _on_Matchmake_pressed():
+func _on_TopBar_on_Matchmake_pressed():
 	dialog.dialog_text = ""
 	dialog.get_ok().hide()
 	dialog.popup_centered()
@@ -201,71 +192,75 @@ func _on_Matchmake_pressed():
 		"completed"
 	)
 	if matchmaker_ticket.is_exception():
-		dialog.dialog_text = ("An error occured: %s" % matchmaker_ticket)
+		dialog.dialog_text = ("[add_matchmaker_async]An error occured: %s" % matchmaker_ticket)
 		dialog.get_ok().show()
 		matchmaker_ticket = null
 		return
 	print("Got ticket: %s" % [matchmaker_ticket])
+
+
 func _on_matchmaker_matched(p_matched : NakamaRTAPI.MatchmakerMatched):
-	print("\n[matchmakerMatched]Received MatchmakerMatched message: %s" % p_matched)
+	print("\n[_on_matchmaker_matched]Received MatchmakerMatched message: %s" % p_matched)
 	var joined_match : NakamaRTAPI.Match = yield(socket.join_matched_async(p_matched), "completed")
 	if joined_match.is_exception():
-		print("\nAn error occured: %s" % joined_match)
+		print("\n[join_matched_async]An error occured: %s" % joined_match)
 		return
-	dialog.hide()
-	
-	MatchState.match_id = joined_match.match_id
-	open_match_room()
 	print("\n[matchmakerMatched]Joined match: %s" % [joined_match])
+	dialog.hide()
+	MatchState.match_id = joined_match.match_id
+
 	for presence in joined_match.presences:
-		MatchState.connected_opponents[presence.user_id] = presence
+		MatchState.connected_players[presence.user_id] = presence
 		print("\n[matchmakerMatchedPresence]User id %s name %s'." % [presence.user_id, presence.username])
-	update_opponent_list()
+	update_player_list()
+	open_match_room()
 
 
 func _on_matchmake_dialog_closed():
 	var removed : NakamaAsyncResult = yield(socket.remove_matchmaker_async(matchmaker_ticket.ticket), "completed")
 	if removed.is_exception():
-		print("An error occured: %s" % removed)
+		print("[remove_matchmaker_async]An error occured: %s" % removed)
 		return
 	print("Removed from matchmaking %s" % [matchmaker_ticket.ticket])
 	matchmaker_ticket = null
-	
+
 
 ### GETTERS & UI UPDATES ###
 func get_match_list():
-	var match_list = yield(socket.rpc_async("match_list"), "completed")
-	var payload = parse_json(match_list.payload)
+	var list = yield(socket.rpc_async("match_list"), "completed")
+	var payload = parse_json(list.payload)
 	return payload
 	
 func update_lobby_list():
-	var matchList = $HBoxContainer/VBoxContainer/VBoxContainer/MatchList
-	matchList.clear()
-	var match_list = yield(get_match_list(), "completed")
-	for _match in match_list:
-		print(_match)
-		matchList.add_item(_match.match_id, null, true)
+	match_list.clear()
+	var list = yield(get_match_list(), "completed")
+	for _match in list:
+#		print(_match)
+		match_list.add_item(_match.match_id, null, true)
 		
-	for i in range(0,matchList.get_item_count()):
-		matchList.set_item_tooltip_enabled(i, false)
-		
-func update_opponent_list():
-	$Panel/VBoxContainer/HBoxContainer2/ItemList.clear()
-	for p in MatchState.connected_opponents:
-		var opponent = MatchState.connected_opponents[p]
-		$Panel/VBoxContainer/HBoxContainer2/ItemList.add_item(opponent.username, null, true)
-		print("\n[update_opponent_list]Connected opponents: %s" % [opponent.username])
-	
-	for i in range(0,$Panel/VBoxContainer/HBoxContainer2/ItemList.get_item_count()):
-		$Panel/VBoxContainer/HBoxContainer2/ItemList.set_item_tooltip_enabled(i, false)
-		
+	for i in range(0,match_list.get_item_count()):
+		match_list.set_item_tooltip_enabled(i, false)
+
+
 func update_player_list():
-	$HBoxContainer/ItemList.clear()
+	player_list.clear()
+	for p in MatchState.connected_players:
+		var opponent = MatchState.connected_players[p]
+		player_list.add_item(opponent.username, null, true)
+		print("[update_player_list]Connected players: %s" % [opponent.username])
+	
+	for i in range(0,player_list.get_item_count()):
+		player_list.set_item_tooltip_enabled(i, false)
+
+
+func update_user_list():
+	user_list.clear()
 	for u in connected_users:
-		$HBoxContainer/ItemList.add_item(connected_users[u].username, null, true)
-	for i in range(0,$HBoxContainer/ItemList.get_item_count()):
-		$HBoxContainer/ItemList.set_item_tooltip_enabled(i, false)
-		
+		user_list.add_item(connected_users[u].username, null, true)
+	for i in range(0,user_list.get_item_count()):
+		user_list.set_item_tooltip_enabled(i, false)
+
+
 #func get_users():
 #	var session = NClient.session
 #	var ids = []
@@ -285,27 +280,33 @@ func notify_new_match():
 	if data.is_exception():
 		print("[notify_new_match]An error occured: %s" % data)
 		return
-	print("[notify_new_match]Successfully joined: %s" % data)
-	
+	print("[notify_new_match]Successfully broadcast match to all connect users")
+
+
 func _on_stream_state_received(p_state : NakamaRTAPI.StreamData):
-	print("Received data from stream: %s" % [p_state.stream])
-#	print("Data: %s" % [parse_json(p_state.state)])
+	var data = parse_json(p_state.state)	
+	if data == my_account.user.id:
+		print("Do not notifiy self of creating match")
+		return
+	print("Received Notification of new created match")
 	update_lobby_list()
-	
+
+
 func _on_stream_presence_received(_p_stream_presence_event):
 	pass
 
 
-func _on_Button3_pressed():
-	webrtc.send_message("Hi from %s" %NClient.user_id)
+func _on_Start_pressed():
+	MatchState.start_game()
 
-func new_rtc(type: String):
-	webrtc = webrtcScript.new()
-	add_child(webrtc, true)
-	yield(get_tree().create_timer(1), "timeout")
-	if type == "create":
-		webrtc.register(NClient.user_id)
-		return
-	elif type == "join":
-		webrtc.join(NClient.user_id)
-		return
+
+func on_game_start():
+	$Game.show()
+
+
+func _on_Button_pressed():
+	rpc("myTestRPC")
+
+
+remotesync func myTestRPC():
+	print("RPC WORKS")

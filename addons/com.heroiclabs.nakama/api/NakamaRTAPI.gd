@@ -206,6 +206,10 @@ class Match extends NakamaAsyncResult:
 		if is_exception(): return get_exception()._to_string()
 		return "Match<authoritative=%s, match_id=%s, label=%s, presences=%s, size=%d, self=%s>" % [authoritative, match_id, label, presences, size, self_user]
 
+	func to_dictionary():
+		var dictionary = {"authoritative": authoritative, "match_id": match_id, "label": label, "presences": presences, "size": size, "self_user" : self_user.to_dictionary()}
+		return dictionary
+
 	static func get_result_key() -> String:
 		return "match"
 
@@ -229,12 +233,14 @@ class MatchData extends NakamaAsyncResult:
 	# The byte contents of the state change.
 	var data : String
 
+	var presence : UserPresence
+	
 	func _init(p_ex = null).(p_ex):
 		pass
 
 	func _to_string():
 		if is_exception(): return get_exception()._to_string()
-		return "MatchData<match_id=%s, op_code=%s, data=%s>" % [match_id, op_code, data]
+		return "MatchData<match_id=%s, op_code=%s, presence=%s, data=%s>" % [match_id, op_code, presence, data]
 
 	static func create(p_ns : GDScript, p_dict : Dictionary) -> MatchData:
 		var out := _safe_ret(NakamaSerializer.deserialize(p_ns, "MatchData", p_dict), MatchData) as MatchData
@@ -565,6 +571,10 @@ class UserPresence extends NakamaAsyncResult:
 		if is_exception(): return get_exception()._to_string()
 		return "UserPresence<persistence=%s, session_id=%s, status=%s, username=%s, user_id=%s>" % [
 			persistence, session_id, status, username, user_id]
+
+	func to_dictionary():
+		var dictionary = {"persistence": persistence, "session_id": session_id, "status": status, "username": username, "user_id": user_id}
+		return dictionary
 
 	static func create(p_ns : GDScript, p_dict : Dictionary) -> UserPresence:
 		return _safe_ret(NakamaSerializer.deserialize(p_ns, "UserPresence", p_dict), UserPresence) as UserPresence

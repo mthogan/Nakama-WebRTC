@@ -14,9 +14,9 @@ local function join_stream(context, _)
   return context.username
 end
 
-local function notify_new_match()
+local function notify_new_match(context)
   local stream_id = { mode = 7 }
-  local payload = nk.json_encode("")
+  local payload = nk.json_encode(context.user_id)
   nk.stream_send(stream_id, payload)
 end
 

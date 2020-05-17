@@ -1,11 +1,6 @@
 # MyClient.gd
 extends Node
 
-# WebRTC variables:
-var webrtc_multiplayer: WebRTCMultiplayer
-var webrtc_peers : Dictionary
-var webrtc_peers_connected : Dictionary
-
 const STORE_FILE = "user://store.ini"
 const STORE_SECTION = "nakama"
 const STORE_KEY = "session"

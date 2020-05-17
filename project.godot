@@ -107,12 +107,6 @@ config/icon="res://icon.png"
 Nakama="*res://addons/com.heroiclabs.nakama/Nakama.gd"
 NClient="*res://NClient.gd"
 MatchState="*res://MatchState.gd"
-UserData="*res://addons/github-integration/scripts/user_data.gd"
-IconLoaderGithub="*res://addons/github-integration/scripts/IconLoaderGithub.gd"
-
-[editor_plugins]
-
-enabled=PoolStringArray( "github-integration" )
 
 [gdnative]
 
